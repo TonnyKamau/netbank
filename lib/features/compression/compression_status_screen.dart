@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+
+import '../../core/models/universal_folder_models.dart';
+import '../../core/services/local_file_service.dart';
+import '../../core/services/operation_flow_service.dart';
+import '../../core/services/universal_folder_api.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_responsive.dart';
 import '../../core/widgets/primary_button.dart';
@@ -6,14 +11,10 @@ import '../../core/widgets/primary_button.dart';
 class CompressionStatusScreen extends StatefulWidget {
   const CompressionStatusScreen({
     super.key,
-    this.fileName = 'vacation_photos.zip',
-    this.originalSize = '128 MB',
     this.onComplete,
     this.onCancel,
   });
 
-  final String fileName;
-  final String originalSize;
   final VoidCallback? onComplete;
   final VoidCallback? onCancel;
 
@@ -21,32 +22,76 @@ class CompressionStatusScreen extends StatefulWidget {
   State<CompressionStatusScreen> createState() => _CompressionStatusScreenState();
 }
 
-class _CompressionStatusScreenState extends State<CompressionStatusScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _progressAnimation;
+class _CompressionStatusScreenState extends State<CompressionStatusScreen> {
+  final _flow = OperationFlowService.instance;
+  final _api = UniversalFolderApi.instance;
+  final _localFiles = LocalFileService.instance;
+
+  CompressionResponse? _result;
+  Object? _error;
+  bool _working = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 4));
-    _progressAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _controller.forward().then((_) {
-      Future.delayed(const Duration(milliseconds: 500), widget.onComplete);
-    });
+    _runCompression();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _runCompression() async {
+    final path = _flow.pendingCompressionPath;
+    final name = _flow.pendingCompressionName;
+    if (path == null || name == null) {
+      setState(() {
+        _working = false;
+        _error = 'No file is queued for compression.';
+      });
+      return;
+    }
+
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+
+    try {
+      final result = await _api.compressFile(filePath: path, fileName: name);
+      final localPath = await _localFiles.saveBytes(
+        bytes: result.bytes,
+        fileName: result.fileName,
+      );
+      final persistedResult = CompressionResponse(
+        filename: result.fileName,
+        size: result.bytes.length,
+        originalSize: result.originalSize ?? 0,
+        ratio: result.ratio ?? 1.0,
+        type: result.type,
+        localPath: localPath,
+      );
+      _flow.recordCompression(persistedResult);
+      if (!mounted) return;
+      setState(() {
+        _result = persistedResult;
+        _working = false;
+      });
+      Future<void>.delayed(const Duration(milliseconds: 450), () {
+        widget.onComplete?.call();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _error = error;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fileName = _flow.pendingCompressionName ?? _result?.filename ?? 'Selected file';
+    final originalSize = _result == null ? '-' : _formatBytes(_result!.originalSize);
+    final compressedSize = _result == null ? '-' : _formatBytes(_result!.size);
+    final savings = _result == null ? '-' : '${(_result!.savingsFraction * 100).toStringAsFixed(1)}%';
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
@@ -63,7 +108,6 @@ class _CompressionStatusScreenState extends State<CompressionStatusScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 24),
-            // File icon
             Center(
               child: Stack(
                 alignment: Alignment.center,
@@ -71,7 +115,7 @@ class _CompressionStatusScreenState extends State<CompressionStatusScreen>
                   Container(
                     width: context.s(100),
                     height: context.s(100),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: AppColors.primaryLight,
                       shape: BoxShape.circle,
                     ),
@@ -80,13 +124,12 @@ class _CompressionStatusScreenState extends State<CompressionStatusScreen>
                   SizedBox(
                     width: context.s(116),
                     height: context.s(116),
-                    child: AnimatedBuilder(
-                      animation: _progressAnimation,
-                      builder: (_, _) => CircularProgressIndicator(
-                        value: _progressAnimation.value,
-                        strokeWidth: 4,
-                        backgroundColor: isDark ? AppColors.slate800 : AppColors.slate200,
-                        valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                    child: CircularProgressIndicator(
+                      value: _working ? null : 1,
+                      strokeWidth: 4,
+                      backgroundColor: isDark ? AppColors.slate800 : AppColors.slate200,
+                      valueColor: AlwaysStoppedAnimation(
+                        _error == null ? AppColors.primary : AppColors.error,
                       ),
                     ),
                   ),
@@ -95,7 +138,7 @@ class _CompressionStatusScreenState extends State<CompressionStatusScreen>
             ),
             const SizedBox(height: 32),
             Text(
-              widget.fileName,
+              fileName,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
@@ -105,65 +148,60 @@ class _CompressionStatusScreenState extends State<CompressionStatusScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'Original size: ${widget.originalSize}',
+              _working ? 'Sending file to Universal Folder backend...' : 'Compression request finished.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary),
             ),
             const SizedBox(height: 40),
-            AnimatedBuilder(
-              animation: _progressAnimation,
-              builder: (_, _) {
-                final pct = (_progressAnimation.value * 100).toInt();
-                return Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Progress', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary)),
-                        Text('$pct%', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        value: _progressAnimation.value,
-                        minHeight: 10,
-                        backgroundColor: isDark ? AppColors.slate800 : AppColors.slate100,
-                        valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceDark : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                      ),
-                      child: Column(
-                        children: [
-                          _StatusRow('Stage', pct < 30 ? 'Analyzing file...' : pct < 70 ? 'Compressing...' : 'Finalizing...', isDark),
-                          const SizedBox(height: 8),
-                          _StatusRow('Est. Result', '~${((double.tryParse(widget.originalSize.split(' ')[0]) ?? 0) * 0.35).toStringAsFixed(1)} MB', isDark),
-                          const SizedBox(height: 8),
-                          _StatusRow('Reduction', '~65%', isDark, valueColor: AppColors.success),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const Spacer(),
-            OutlinedButton(
-              onPressed: widget.onCancel,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-                side: const BorderSide(color: AppColors.primary),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
               ),
-              child: const Text('Cancel'),
+              child: Column(
+                children: [
+                  _StatusRow('Stage', _error != null ? 'Failed' : (_working ? 'Compressing...' : 'Completed'), isDark, valueColor: _error != null ? AppColors.error : null),
+                  const SizedBox(height: 8),
+                  _StatusRow('Original', originalSize, isDark),
+                  const SizedBox(height: 8),
+                  _StatusRow('Compressed', compressedSize, isDark),
+                  const SizedBox(height: 8),
+                  _StatusRow('Reduction', savings, isDark, valueColor: AppColors.success),
+                ],
+              ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 20),
+              Text(
+                _error.toString(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.error, fontSize: 13),
+              ),
+            ] else if (_result?.localPath != null) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Saved on this device:\n${_result!.localPath}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            const Spacer(),
+            if (_error != null)
+              PrimaryButton(label: 'Try Again', onPressed: _runCompression)
+            else
+              OutlinedButton(
+                onPressed: widget.onCancel,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                  side: const BorderSide(color: AppColors.primary),
+                ),
+                child: Text(_working ? 'Cancel' : 'Close'),
+              ),
           ],
         ),
       ),
@@ -190,28 +228,37 @@ class _StatusRow extends StatelessWidget {
   }
 }
 
-
 class StorageSuccessScreen extends StatelessWidget {
   const StorageSuccessScreen({
     super.key,
-    this.fileName = 'vacation_photos.zip',
-    this.originalSize = '128 MB',
-    this.compressedSize = '44.8 MB',
-    this.savings = '65%',
     this.onDone,
     this.onViewHistory,
   });
 
-  final String fileName;
-  final String originalSize;
-  final String compressedSize;
-  final String savings;
   final VoidCallback? onDone;
   final VoidCallback? onViewHistory;
 
   @override
   Widget build(BuildContext context) {
+    final flow = OperationFlowService.instance;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompression = flow.lastOperation != OperationKind.decompression;
+    final compression = flow.lastCompression;
+    final decompression = flow.lastDecompression;
+
+    final title = isCompression ? 'Compression Complete!' : 'Decompression Complete!';
+    final fileName = isCompression
+        ? (compression?.filename ?? 'Output ready')
+        : (decompression?.filename ?? 'Restored output ready');
+    final originalValue = isCompression
+        ? _formatBytes(compression?.originalSize ?? 0)
+        : 'Stored archive';
+    final resultValue = isCompression
+        ? _formatBytes(compression?.size ?? 0)
+        : _formatBytes(decompression?.size ?? 0);
+    final badge = isCompression
+        ? '-${(((compression?.savingsFraction ?? 0) * 100)).toStringAsFixed(1)}%'
+        : 'Ready';
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
@@ -232,7 +279,7 @@ class StorageSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Compression Complete!',
+                title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -257,15 +304,13 @@ class StorageSuccessScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _ResultStat(label: 'Original', value: originalSize, isDark: isDark),
-                    Column(children: [
-                      Icon(Icons.arrow_forward, color: AppColors.primary, size: 20),
-                    ]),
-                    _ResultStat(label: 'Compressed', value: compressedSize, isDark: isDark),
+                    _ResultStat(label: isCompression ? 'Original' : 'Source', value: originalValue, isDark: isDark),
+                    const Icon(Icons.arrow_forward, color: AppColors.primary, size: 20),
+                    _ResultStat(label: isCompression ? 'Compressed' : 'Output', value: resultValue, isDark: isDark),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(8)),
-                      child: Text('-$savings', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text(badge, style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ],
                 ),
@@ -301,4 +346,16 @@ class _ResultStat extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '-';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  double value = bytes.toDouble();
+  var index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index++;
+  }
+  return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} ${units[index]}';
 }

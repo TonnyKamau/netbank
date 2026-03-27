@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/services/platform_auth_service.dart';
+import '../../core/services/session_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_responsive.dart';
+import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/primary_button.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -22,7 +25,40 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _loading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      await PlatformAuthService.instance.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      await SessionService.setLoggedIn(true);
+      widget.onLogin?.call();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      'Netbank',
+                      'Universal Folder',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
@@ -84,38 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // Hero
-                          Container(
-                            height: context.sh(180),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: context.s(72),
-                                    height: context.s(72),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: const Icon(Icons.compress, color: Colors.white, size: 36),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'Netbank',
-                                    style: TextStyle(
-                                      color: AppColors.primary,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                          Center(child: AppLogo(size: context.s(100))),
                           const SizedBox(height: 24),
                           Text(
                             'Welcome Back',
@@ -141,6 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           _FieldLabel(label: 'Email', isDark: isDark),
                           const SizedBox(height: 8),
                           TextFormField(
+                            controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(hintText: 'name@company.com'),
                           ),
@@ -165,21 +171,30 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
+                            controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               hintText: '••••••••',
                               suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                  color: AppColors.textPrimary,
-                                  size: 20,
-                                ),
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
+                                size: 20,
+                              ),
                                 onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                               ),
                             ),
                           ),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: AppColors.error, fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                           const SizedBox(height: 20),
-                          PrimaryButton(label: 'Log In', onPressed: widget.onLogin),
+                          PrimaryButton(label: _loading ? 'Logging In...' : 'Log In', onPressed: _loading ? null : _submit),
                           const SizedBox(height: 20),
                           _DividerOr(isDark: isDark),
                           const SizedBox(height: 20),
@@ -220,8 +235,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: widget.onRegister,
+                              TextButton(
+                                onPressed: widget.onRegister,
+                                style: TextButton.styleFrom(
+                                  minimumSize: Size.zero,
+                                  padding: EdgeInsets.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
                                 child: const Text(
                                   'Create an account',
                                   style: TextStyle(

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:go_router/go_router.dart';
 
 import '../core/services/onboarding_service.dart';
+import '../core/services/session_service.dart';
 import '../features/onboarding/splash_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/auth/login_screen.dart';
@@ -8,6 +11,8 @@ import '../features/auth/register_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/two_factor_auth_screen.dart';
 import '../features/auth/pin_entry_screen.dart';
+import '../features/auth/pin_setup_screen.dart';
+import '../features/auth/pin_forgot_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/compression/compression_history_screen.dart';
 import '../features/compression/batch_compression_screen.dart';
@@ -28,6 +33,9 @@ class AppRoutes {
   static const resetSuccess = '/reset-success';
   static const twoFactor = '/two-factor';
   static const pinEntry = '/pin-entry';
+  static const pinSetup = '/pin-setup';
+  static const pinForgot = '/pin-forgot';
+  static const pinReset = '/pin-reset';
   static const biometrics = '/biometrics';
   static const home = '/home';
   static const history = '/history';
@@ -60,20 +68,23 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
     GoRoute(
       path: AppRoutes.onboarding,
       builder: (context, state) => OnboardingScreen(
-        onGetStarted: () async {
-          await OnboardingService.markComplete();
-          if (context.mounted) context.go(AppRoutes.register);
+        onGetStarted: () {
+          unawaited(OnboardingService.markComplete());
+          context.go(AppRoutes.register);
         },
-        onLogin: () async {
-          await OnboardingService.markComplete();
-          if (context.mounted) context.go(AppRoutes.login);
+        onLogin: () {
+          unawaited(OnboardingService.markComplete());
+          context.go(AppRoutes.login);
         },
       ),
     ),
     GoRoute(
       path: AppRoutes.login,
       builder: (context, state) => LoginScreen(
-        onLogin: () => context.go(AppRoutes.home),
+        onLogin: () async {
+          await SessionService.setLoggedIn(true);
+          if (context.mounted) context.go(AppRoutes.home);
+        },
         onRegister: () => context.go(AppRoutes.register),
         onForgotPassword: () => context.push(AppRoutes.forgotPassword),
         onBack: () => context.go(AppRoutes.onboarding),
@@ -82,7 +93,10 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
     GoRoute(
       path: AppRoutes.register,
       builder: (context, state) => RegisterScreen(
-        onRegister: () => context.go(AppRoutes.home),
+        onRegister: () async {
+          await SessionService.setLoggedIn(true);
+          if (context.mounted) context.go(AppRoutes.home);
+        },
         onLogin: () => context.go(AppRoutes.login),
         onBack: () => context.go(AppRoutes.onboarding),
       ),
@@ -109,19 +123,46 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
     GoRoute(
       path: AppRoutes.twoFactor,
       builder: (context, state) => TwoFactorAuthScreen(
-        onVerify: () => context.go(AppRoutes.home),
+        onVerify: () async {
+          await SessionService.setLoggedIn(true);
+          if (context.mounted) context.go(AppRoutes.home);
+        },
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.pinSetup,
+      builder: (context, state) => const PinSetupScreen(),
     ),
     GoRoute(
       path: AppRoutes.pinEntry,
       builder: (context, state) => PinEntryScreen(
-        onSuccess: () => context.go(AppRoutes.home),
+        onSuccess: () async {
+          await SessionService.setLoggedIn(true);
+          if (context.mounted) context.go(AppRoutes.home);
+        },
+        onForgotPin: () => context.push(AppRoutes.pinForgot),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.pinForgot,
+      builder: (context, state) => PinForgotScreen(
+        onResetComplete: () => context.pushReplacement(AppRoutes.pinReset),
+        onCancel: () => context.pop(),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.pinReset,
+      builder: (context, state) => PinResetScreen(
+        onLoginAgain: () => context.go(AppRoutes.login),
       ),
     ),
     GoRoute(
       path: AppRoutes.biometrics,
       builder: (context, state) => BiometricsScreen(
-        onAuthenticate: () => context.go(AppRoutes.home),
+        onSuccess: () async {
+          await SessionService.setLoggedIn(true);
+          if (context.mounted) context.go(AppRoutes.home);
+        },
         onUsePIN: () => context.go(AppRoutes.pinEntry),
       ),
     ),
@@ -130,12 +171,12 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
       builder: (context, state) => HomeScreen(
         onNavigate: (tab) {
           switch (tab.name) {
-            case 'history': context.push(AppRoutes.history); break;
-            case 'batch': context.push(AppRoutes.batch); break;
-            case 'settings': context.push(AppRoutes.settings); break;
+            case 'history': context.go(AppRoutes.history); break;
+            case 'batch': context.go(AppRoutes.batch); break;
+            case 'settings': context.go(AppRoutes.settings); break;
           }
         },
-        onCompress: () => context.push(AppRoutes.batch),
+        onCompress: () => context.go(AppRoutes.batch),
       ),
     ),
     GoRoute(
@@ -144,8 +185,8 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
         onNavigate: (tab) {
           switch (tab.name) {
             case 'home': context.go(AppRoutes.home); break;
-            case 'batch': context.push(AppRoutes.batch); break;
-            case 'settings': context.push(AppRoutes.settings); break;
+            case 'batch': context.go(AppRoutes.batch); break;
+            case 'settings': context.go(AppRoutes.settings); break;
           }
         },
         onDecompress: () => context.push(AppRoutes.selectFiles),
@@ -157,8 +198,8 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
         onNavigate: (tab) {
           switch (tab.name) {
             case 'home': context.go(AppRoutes.home); break;
-            case 'history': context.push(AppRoutes.history); break;
-            case 'settings': context.push(AppRoutes.settings); break;
+            case 'history': context.go(AppRoutes.history); break;
+            case 'settings': context.go(AppRoutes.settings); break;
           }
         },
         onStartBatch: () => context.push(AppRoutes.compressionStatus),
@@ -194,6 +235,14 @@ GoRouter buildRouter(bool skipOnboarding) => GoRouter(
     GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => SettingsScreen(
+        onBack: () => context.go(AppRoutes.home),
+        onNavigate: (tab) {
+          switch (tab.name) {
+            case 'home': context.go(AppRoutes.home); break;
+            case 'history': context.go(AppRoutes.history); break;
+            case 'batch': context.go(AppRoutes.batch); break;
+          }
+        },
         onPricing: () => context.push(AppRoutes.pricing),
         onPinSetup: () => context.push(AppRoutes.pinEntry),
         onBiometrics: () => context.push(AppRoutes.biometrics),

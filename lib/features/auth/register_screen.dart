@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/services/platform_auth_service.dart';
+import '../../core/services/session_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_responsive.dart';
+import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/primary_button.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -20,8 +23,50 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _acceptTerms = false;
+  bool _loading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_acceptTerms) {
+      setState(() => _errorMessage = 'Please accept the terms to continue.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await PlatformAuthService.instance.register(
+        fullName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      await SessionService.setLoggedIn(true);
+      widget.onRegister?.call();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      'Netbank',
+                      'Universal Folder',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
@@ -57,34 +102,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
             ),
-            // Hero banner
-            Container(
-              height: context.sh(160),
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 48),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Start saving space today',
-                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            Center(child: AppLogo(size: context.s(80))),
             Expanded(
               child: SingleChildScrollView(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   decoration: BoxDecoration(
                     color: isDark ? AppColors.surfaceDark : Colors.white,
                     borderRadius: BorderRadius.circular(24),
@@ -93,7 +115,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -101,50 +123,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           'Create Account',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 28,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
                             letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Start saving space on your device today with smart compression',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildLabel('Full Name', isDark),
-                        const SizedBox(height: 8),
-                        TextFormField(decoration: const InputDecoration(hintText: 'Enter your full name')),
                         const SizedBox(height: 16),
+                        _buildLabel('Full Name', isDark),
+                        const SizedBox(height: 6),
+                        TextFormField(controller: _nameController, decoration: const InputDecoration(hintText: 'Enter your full name')),
+                        const SizedBox(height: 12),
                         _buildLabel('Email Address', isDark),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         TextFormField(
+                          controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(hintText: 'you@example.com'),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _buildLabel('Password', isDark),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         TextFormField(
+                          controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             hintText: 'Create a strong password',
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                color: AppColors.textPrimary,
+                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary,
                                 size: 20,
                               ),
                               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -183,9 +198,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        PrimaryButton(label: 'Create Account', onPressed: widget.onRegister),
-                        const SizedBox(height: 20),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: AppColors.error, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        PrimaryButton(label: _loading ? 'Creating Account...' : 'Create Account', onPressed: _loading ? null : _submit),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(child: Divider(color: isDark ? AppColors.borderDark : AppColors.borderLight)),
@@ -227,7 +250,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -235,8 +258,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               'Already have an account? ',
                               style: TextStyle(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary, fontSize: 14),
                             ),
-                            GestureDetector(
-                              onTap: widget.onLogin,
+                            TextButton(
+                              onPressed: widget.onLogin,
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
                               child: const Text(
                                 'Log In',
                                 style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14),

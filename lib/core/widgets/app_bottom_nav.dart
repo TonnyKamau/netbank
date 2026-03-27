@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/app_responsive.dart';
 
 enum NavTab { home, history, batch, settings }
 
@@ -14,13 +15,13 @@ class AppBottomNav extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
+        color: isDark ? AppColors.surfaceDark.withValues(alpha: 0.96) : Colors.white.withValues(alpha: 0.96),
         border: Border(top: BorderSide(color: isDark ? AppColors.borderDark : AppColors.borderLight)),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: context.s(12), vertical: context.s(8)),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -77,27 +78,44 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isActive ? activeIcon : icon,
-            color: isActive ? AppColors.primary : AppColors.slate400,
-            size: 24,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(horizontal: context.s(14), vertical: context.s(8)),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primary.withValues(alpha: 0.14) : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-              color: isActive ? AppColors.primary : AppColors.slate400,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: isActive ? 1.08 : 1,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutBack,
+                child: Icon(
+                  isActive ? activeIcon : icon,
+                  color: isActive ? AppColors.primary : AppColors.slate400,
+                  size: isActive ? context.s(31) : context.s(28),
+                ),
+              ),
+              SizedBox(height: context.s(4)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: context.s(11),
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                  color: isActive ? AppColors.primary : AppColors.slate400,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_responsive.dart';
+import '../../core/widgets/app_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, this.onDone});
@@ -94,57 +95,14 @@ class _SplashScreenState extends State<SplashScreen>
                     children: [
                       const Spacer(flex: 3),
 
-                      // Logo card
-                      Container(
-                        padding: EdgeInsets.all(context.s(28)),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.surfaceDark : Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.12),
-                              blurRadius: 40,
-                              offset: const Offset(0, 10),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.05),
-                          ),
-                        ),
-                        child: Stack(
-                          alignment: Alignment.bottomRight,
-                          children: [
-                            Icon(
-                              Icons.cloud_outlined,
-                              color: AppColors.primary,
-                              size: context.s(96),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // Logo
+                      AppLogo(size: context.s(140), withBackground: false),
 
                       SizedBox(height: context.sh(28)),
 
                       // App name
                       Text(
-                        'Netbank',
+                        'Universal Folder',
                         style: TextStyle(
                           fontSize: context.s(40),
                           fontWeight: FontWeight.bold,

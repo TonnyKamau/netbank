@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_responsive.dart';
+import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/primary_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -140,7 +141,7 @@ class _Slide1 extends StatelessWidget {
                 const SizedBox(width: 48),
                 Expanded(
                   child: Text(
-                    'Netbank',
+                    'Universal Folder',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
@@ -203,11 +204,7 @@ class _Slide1 extends StatelessWidget {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.cloud_done,
-                          color: AppColors.primary,
-                          size: context.s(96),
-                        ),
+                        AppLogo(size: context.s(110)),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -591,11 +588,7 @@ class _Slide3 extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.cloud_done,
-                              color: AppColors.primary,
-                              size: context.s(88),
-                            ),
+                            AppLogo(size: context.s(100)),
                             const SizedBox(height: 12),
                             Row(
                               mainAxisSize: MainAxisSize.min,
